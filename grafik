@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>График дежурств • Горячая линия</title>
+    <!-- Подключаем SheetJS для экспорта в Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --card-bg: rgba(255, 255, 255, 0.98);
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --auth-bg: #8b5cf6;
+            --auth-hover: #7c3aed;
+            --border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        body { 
+            font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+            background: var(--bg-gradient); 
+            min-height: 100vh;
+            margin: 0; 
+            padding: 24px; 
+            color: var(--text-main); 
+        }
+
+        .container { 
+            display: flex; 
+            gap: 24px; 
+            max-width: 1550px; 
+            margin: 0 auto; 
+            align-items: flex-start; 
+        }
+
+        .panel { 
+            background: var(--card-bg); 
+            backdrop-filter: blur(12px);
+            padding: 24px; 
+            border-radius: 16px; 
+            box-shadow: var(--shadow); 
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .schedule-panel { 
+            flex: 2.2; 
+            height: 88vh; 
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stats-panel { 
+            flex: 1.2; 
+            position: sticky; 
+            top: 24px; 
+            max-height: 88vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-container {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-top: 12px;
+            background: #fff;
+        }
+
+        .table-container::-webkit-scrollbar { width: 6px; }
+        .table-container::-webkit-scrollbar-track { background: #f1f5f9; }
+        .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .table-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        h2 { 
+            margin: 0; 
+            color: var(--text-main); 
+            font-size: 1.15rem; 
+            font-weight: 700;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .top-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-box:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+
+        .month-filter-bar {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 8px 0;
+            margin-top: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .month-btn {
+            padding: 5px 10px;
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .month-btn:hover { background: #e2e8f0; color: var(--text-main); }
+        .month-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 10px 14px; border-bottom: 1px solid var(--border); text-align: left; }
+        th { background-color: #f8fafc; color: var(--text-muted); font-weight: 600; position: sticky; top: 0; z-index: 10; }
+
+        tr { transition: background-color 0.15s ease; }
+        tr:hover:not(:first-child) { background-color: #f8fafc; }
+
+        select { 
+            width: 100%; 
+            padding: 7px 10px; 
+            border: 1px solid var(--border); 
+            border-radius: 8px; 
+            font-size: 0.85rem; 
+            font-family: inherit;
+            background-color: #fff; 
+            color: var(--text-main);
+            cursor: pointer; 
+            transition: all 0.2s;
+        }
+        select:hover:not(:disabled) { border-color: var(--primary); }
+        select:disabled { background-color: #f8fafc; color: #94a3b8; cursor: not-allowed; }
+        select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+
+        .has-error select {
+            border-color: var(--danger) !important;
+            background-color: #fff5f5 !important;
+        }
+
+        .weekend-row { background-color: #fff5f5 !important; }
+        .weekend-text { color: var(--danger); text-align: center; font-style: italic; font-weight: 600; }
+        .weekday-col { color: var(--text-muted); font-weight: 500; text-transform: capitalize; }
+        .date-col { font-weight: 600; color: #334155; }
+
+        .controls { 
+            margin-top: 14px; 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+            justify-content: space-between; 
+            flex-wrap: wrap; 
+        }
+
+        .buttons-group { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        button { 
+            padding: 8px 12px; 
+            background-color: var(--primary); 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer; 
+            transition: all 0.2s; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        button:active { transform: scale(0.97); }
+        button:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
+
+        .btn-success { background-color: #059669; }
+        .btn-success:hover { background-color: #047857; }
+        .btn-danger { background-color: var(--danger); }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-auth { background-color: var(--auth-bg); }
+        .btn-auth:hover { background-color: var(--auth-hover); }
+        .btn-warning { background-color: #d97706; }
+        .btn-warning:hover { background-color: #b45309; }
+
+        .auth-status { 
+            font-size: 0.75rem; 
+            font-weight: 600; 
+            text-transform: uppercase;
+            color: var(--text-muted); 
+            background: #f1f5f9;
+            padding: 5px 10px;
+            border-radius: 30px;
+        }
+        .auth-status.admin { background: #d1fae5; color: #065f46; }
+
+        .hint-text {
+            font-size: 0.75rem; 
+            color: var(--text-muted); 
+            margin-top: 12px; 
+            line-height: 1.4;
+        }
+
+        .stat-row-content { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
+        .stat-info-line { display: flex; justify-content: space-between; align-items: center; }
+        .stat-name { font-weight: 600; font-size: 0.8rem; color: #1e293b; }
+        .stat-badge { padding: 2px 8px; border-radius: 20px; font-weight: 700; font-size: 0.7rem; }
+
+        .badge-green { background: #d1fae5; color: #065f46; }
+        .badge-yellow { background: #fef3c7; color: #92400e; }
+        .badge-orange { background: #ffedd5; color: #c2410c; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+
+        .stat-bar-container { background-color: #f1f5f9; border-radius: 4px; height: 5px; width: 100%; overflow: hidden; }
+        .stat-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center; align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+        .modal-content h3 { margin-top: 0; font-size: 1.1rem; }
+        .modal-group { margin-bottom: 12px; }
+        .modal-group label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--text-muted); }
+        .modal-group input { width: 100%; padding: 7px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel schedule-panel">
+        <h2>
+            <span id="panelTitle">📅 Расписание дежурств (2027)</span>
+            <span id="authStatusText" class="auth-status">Просмотр</span>
+        </h2>
+        
+        <div class="top-toolbar">
+            <input type="text" id="searchBox" class="search-box" placeholder="🔍 Быстрый поиск специалиста по фамилии..." oninput="renderSchedule()">
+        </div>
+
+        <div class="month-filter-bar" id="monthFilterBar">
+            <button class="month-btn active" onclick="selectMonth('ALL')">Весь год</button>
+            <button class="month-btn" onclick="selectMonth(0)">Январь</button>
+            <button class="month-btn" onclick="selectMonth(1)">Февраль</button>
+            <button class="month-btn" onclick="selectMonth(2)">Март</button>
+            <button class="month-btn" onclick="selectMonth(3)">Апрель</button>
+            <button class="month-btn" onclick="selectMonth(4)">Май</button>
+            <button class="month-btn" onclick="selectMonth(5)">Июнь</button>
+            <button class="month-btn" onclick="selectMonth(6)">Июль</button>
+            <button class="month-btn" onclick="selectMonth(7)">Август</button>
+            <button class="month-btn" onclick="selectMonth(8)">Сентябрь</button>
+            <button class="month-btn" onclick="selectMonth(9)">Октябрь</button>
+            <button class="month-btn" onclick="selectMonth(10)">Ноябрь</button>
+            <button class="month-btn" onclick="selectMonth(11)">Декабрь</button>
+        </div>
+
+        <div class="table-container">
+            <table id="scheduleTable">
+                <thead>
+                    <tr>
+                        <th width="18%">Дата</th>
+                        <th width="22%">День недели</th>
+                        <th width="30%">Дежурный 1</th>
+                        <th width="30%">Дежурный 2</th>
+                    </tr>
+                </thead>
+                <tbody id="scheduleBody"></tbody>
+            </table>
+        </div>
+        <div class="controls">
+            <div class="buttons-group" id="adminButtons" style="display: none;">
+                <button onclick="autoFillCurrentMonth()" title="Заполнить пустые места по кругу">⚡ Авто</button>
+                <button onclick="openSwapModal()" class="btn-warning" title="Поменять смены местами">🔄 Обмен</button>
+                <button onclick="clearSchedule()" class="btn-danger" title="Очистить график">🗑 Очистить</button>
+            </div>
+            <div class="buttons-group" style="margin-left: auto;">
+                <button onclick="printCurrentMonth()" class="btn-warning" title="Печать месяца на А4">🖨 Печать</button>
+                <button onclick="exportToExcel()" class="btn-success" title="Скачать в Excel">📊 Excel</button>
+                <button onclick="toggleAuth()" id="authBtn" class="btn-auth">🔒 Войти</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel stats-panel">
+        <h2 id="statsTitle">📊 Нагрузка (Всего за год)</h2>
+        <div class="table-container" style="max-height: 72vh; margin-top: 14px;">
+            <table id="statsTable">
+                <thead>
+                    <tr>
+                        <th>Специалист / Смен (от большего к меньшему)</th>
+                    </tr>
+                </thead>
+                <tbody id="statsBody"></tbody>
+            </table>
+        </div>
+        <p class="hint-text" id="hintText">
+            💡 Ошибки: ячейки подсвечиваются красным при двойном назначении в один день.
+        </p>
+    </div>
+</div>
+
+<div id="swapModal" class="modal">
+    <div class="modal-content">
+        <h3>🔄 Быстрый обмен смен</h3>
+        <div class="modal-group">
+            <label>Дата первой смены:</label>
+            <input type="date" id="swapDate1" min="2027-01-01" max="2027-12-31">
+        </div>
+        <div class="modal-group">
+            <label>Дата второй смены:</label>
+            <input type="date" id="swapDate2" min="2027-01-01" max="2027-12-31">
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button onclick="executeSwap()" class="btn-success" style="flex: 1;">Поменять местами</button>
+            <button onclick="closeSwapModal()" class="btn-danger" style="flex: 1;">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const ADMIN_PASSWORD = "12345";
+    let isAdmin = localStorage.getItem('hotlineIsAdmin') === 'true';
+    let currentMonthFilter = 'ALL';
+
+    const year = 2027;
+    const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+    
+    const inspectors = [
+        "Благова Ольга Викторовна",
+        "Боброва Светлана Анатольевна",
+        "Волкова Дарья Игоревна",
+        "Галяудинова Нурия Сафиулловна",
+        "Горшенина Инна Анатольевна",
+        "Зотова Ирина Андреевна",
+        "Иноземцева Светлана Федоровна",
+        "Ким Алла Алексеевна",
+        "Колесавина Ольга Владимировна",
+        "Кореев Виктор Андреевич",
+        "Кутовая Галина Николаевна",
+        "Матус Ольга Алексеевна",
+        "Мятликова Наталья Владимировна",
+        "Романов Даниил Евгеньевич",
+        "Тамбовцева Елена Николаевна"
+    ];
+    
+    const holidays = ['01-01', '01-04', '01-05', '01-06', '01-07', '01-08', '02-23', '03-08', '05-03', '05-10', '06-14', '11-04'];
+    let scheduleData = JSON.parse(localStorage.getItem('hotlineSchedule')) || {};
+
+    function init() {
+        updateAuthUI();
+        renderSchedule();
+        updateStats();
+    }
+
+    function selectMonth(monthIndex) {
+        currentMonthFilter = monthIndex;
+        
+        const buttons = document.querySelectorAll('.month-btn');
+        buttons.forEach((btn, idx) => {
+            if ((monthIndex === 'ALL' && idx === 0) || (idx === monthIndex + 1)) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        if (monthIndex === 'ALL') {
+            document.getElementById('panelTitle').textContent = `📅 Расписание дежурств (${year})`;
+            document.getElementById('statsTitle').textContent = `📊 Нагрузка (Всего за год)`;
+        } else {
+            document.getElementById('panelTitle').textContent = `📅 График: ${monthNames[monthIndex]} ${year}`;
+            document.getElementById('statsTitle').textContent = `📊 Нагрузка за ${monthNames[monthIndex]}`;
+        }
+
+        renderSchedule();
+        updateStats();
+    }
+
+    function toggleAuth() {
+        if (isAdmin) {
+            if (confirm("Выйти из режима редактирования?")) {
+                isAdmin = false;
+                localStorage.setItem('hotlineIsAdmin', 'false');
+                init();
+            }
+        } else {
+            const pass = prompt("Введите пароль для редактирования графика:");
+            if (pass === ADMIN_PASSWORD) {
+                isAdmin = true;
+                localStorage.setItem('hotlineIsAdmin', 'true');
+                alert("Доступ разрешен!");
+                init();
+            } else if (pass !== null) {
+                alert("Неверный пароль!");
+            }
+        }
+    }
+
+    function updateAuthUI() {
+        const authBtn = document.getElementById('authBtn');
+        const adminButtons = document.getElementById('adminButtons');
+        const authStatusText = document.getElementById('authStatusText');
+        const hintText = document.getElementById('hintText');
+
+        if (isAdmin) {
+            authBtn.textContent = "Выйти";
+            authBtn.className = "btn-danger";
+            adminButtons.style.display = "flex";
+            authStatusText.textContent = "Правка";
+            authStatusText.className = "auth-status admin";
+            hintText.innerHTML = "✨ Режим редактирования активен. Изменения сохраняются.";
+        } else {
+            authBtn.textContent = "Войти";
+            authBtn.className = "btn-auth";
+            adminButtons.style.display = "none";
+            authStatusText.textContent = "Просмотр";
+            authStatusText.className = "auth-status";
+            hintText.innerHTML = "💡 Нажмите «Войти» для изменения графика.";
+        }
+    }
+
+    function isWorkingDay(date) {
+        const day = date.getDay();
+        if (day === 0 || day === 6) return false;
+        
+        const monthStr = String(date.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(date.getDate()).padStart(2, '0');
+        const dateString = `${monthStr}-${dayStr}`;
+        
+        if (holidays.includes(dateString)) return false;
+        return true;
+    }
+
+    function renderSchedule() {
+        const tbody = document.getElementById('scheduleBody');
+        tbody.innerHTML = '';
+        
+        const searchQuery = document.getElementById('searchBox').value.toLowerCase().trim();
+        let currentDate = new Date(year, 0, 1);
+        
+        while (currentDate.getFullYear() === year) {
+            const monthIdx = currentDate.getMonth();
+            
+            if (currentMonthFilter !== 'ALL' && monthIdx !== currentMonthFilter) {
+                currentDate.setDate(currentDate.getDate() + 1);
+                continue;
+            }
+
+            const isoDate = currentDate.toISOString().split('T')[0];
+            const val1 = scheduleData[`${isoDate}_1`] || "";
+            const val2 = scheduleData[`${isoDate}_2`] || "";
+
+            if (searchQuery) {
+                const match1 = val1.toLowerCase().includes(searchQuery);
+                const match2 = val2.toLowerCase().includes(searchQuery);
+                if (!match1 && !match2) {
+                    currentDate.setDate(currentDate.getDate() + 1);
+                    continue;
+                }
+            }
+
+            const tr = document.createElement('tr');
+            const dateStr = currentDate.toLocaleDateString('ru-RU');
+            const weekdayStr = currentDate.toLocaleDateString('ru-RU', { weekday: 'long' });
+            
+            const tdDate = document.createElement('td');
+            tdDate.className = 'date-col';
+            tdDate.textContent = dateStr;
+            tr.appendChild(tdDate);
+            
+            const tdWeekday = document.createElement('td');
+            tdWeekday.textContent = weekdayStr;
+            tdWeekday.className = 'weekday-col';
+            tr.appendChild(tdWeekday);
+            
+            if (!isWorkingDay(currentDate)) {
+                tr.classList.add('weekend-row');
+                const tdWeekend = document.createElement('td');
+                tdWeekend.colSpan = 2;
+                tdWeekend.className = 'weekend-text';
+                tdWeekend.textContent = '☕ ВЫХОДНОЙ / ПРАЗДНИК';
+                tr.appendChild(tdWeekend);
+            } else {
+                tr.appendChild(createSelectCell(isoDate, 1, val1, val2));
+                tr.appendChild(createSelectCell(isoDate, 2, val2, val1));
+            }
+            
+            tbody.appendChild(tr);
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+    }
+
+    function createSelectCell(dateIso, slotIndex, currentVal, otherVal) {
+        const td = document.createElement('td');
+        const select = document.createElement('select');
+        
+        select.disabled = !isAdmin;
+        
+        if (currentVal && currentVal === otherVal) {
+            td.classList.add('has-error');
+            select.title = "Ошибка: один специалист выбран на оба дежурства в этот день!";
+        }
+
+        select.innerHTML = '<option value="">-- Специалист --</option>';
+        inspectors.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            select.appendChild(option);
+        });
+        
+        if (currentVal) select.value = currentVal;
+        
+        select.addEventListener('change', function() {
+            if (!isAdmin) return;
+            scheduleData[`${dateIso}_${slotIndex}`] = this.value;
+            localStorage.setItem('hotlineSchedule', JSON.stringify(scheduleData));
+            renderSchedule();
+            updateStats();
+        });
+        
+        td.appendChild(select);
+        return td;
+    }
+
+    // ИСПРАВЛЕННЫЙ ТОЧНЫЙ ПОДСЧЕТ СМЕН
+    function updateStats() {
+        const tbody = document.getElementById('statsBody');
+        tbody.innerHTML = '';
+        
+        const counts = {};
+        inspectors.forEach(name => counts[name] = 0);
+        
+        let currentDate = new Date(year, 0, 1);
+        while (currentDate.getFullYear() === year) {
+            const monthIdx = currentDate.getMonth();
+            
+            // Если выбран месяц, считаем строго по нему
+            if (currentMonthFilter !== 'ALL' && monthIdx !== currentMonthFilter) {
+                currentDate.setDate(currentDate.getDate() + 1);
+                continue;
+            }
+
+            const isoDate = currentDate.toISOString().split('T')[0];
+            const name1 = scheduleData[`${isoDate}_1`];
+            const name2 = scheduleData[`${isoDate}_2`];
+
+            if (name1 && counts[name1] !== undefined) counts[name1]++;
+            if (name2 && counts[name2] !== undefined) counts[name2]++;
+
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        const sortedStats = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        const maxCount = Math.max(...Object.values(counts), 1);
+        const minCount = Math.min(...Object.values(counts));
+        
+        sortedStats.forEach(([name, count]) => {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            
+            const percent = Math.round((count / maxCount) * 100);
+            
+            let badgeClass = 'badge-green';
+            let barColor = '#10b981';
+
+            if (maxCount === minCount) {
+                badgeClass = 'badge-green';
+                barColor = '#10b981';
+            } else {
+                let range = maxCount - minCount;
+                let valPosition = count - minCount;
+                let ratio = range === 0 ? 0 : valPosition / range;
+
+                if (ratio > 0.75) {
+                    badgeClass = 'badge-red';
+                    barColor = '#ef4444';
+                } else if (ratio > 0.45) {
+                    badgeClass = 'badge-orange';
+                    barColor = '#f97316';
+                } else if (ratio > 0.2) {
+                    badgeClass = 'badge-yellow';
+                    barColor = '#f59e0b';
+                } else {
+                    badgeClass = 'badge-green';
+                    barColor = '#10b981';
+                }
+            }
+            
+            td.innerHTML = `
+                <div class="stat-row-content">
+                    <div class="stat-info-line">
+                        <span class="stat-name">${name}</span>
+                        <span class="stat-badge ${badgeClass}">${count} смен</span>
+                    </div>
+                    <div class="stat-bar-container">
+                        <div class="stat-bar-fill" style="width: ${percent}%; background-color: ${barColor};"></div>
+                    </div>
+                </div>
+            `;
+            
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        });
+    }
+
+    function openSwapModal() {
+        if (!isAdmin) return;
+        document.getElementById('swapModal').style.display = 'flex';
+    }
+    function closeSwapModal() {
+        document.getElementById('swapModal').style.display = 'none';
+    }
+    function executeSwap() {
+        const d1 = document.getElementById('swapDate1').value;
+        const d2 = document.getElementById('swapDate2').value;
+        if (!d1 || !d2) {
+            alert("Выберите обе даты для обмена!");
+            return;
+        }
+
+        let temp1_1 = scheduleData[`${d1}_1`];
+        let temp1_2 = scheduleData[`${d1}_2`];
+
+        scheduleData[`${d1}_1`] = scheduleData[`${d2}_1`];
+        scheduleData[`${d1}_2`] = scheduleData[`${d2}_2`];
+
+        scheduleData[`${d2}_1`] = temp1_1;
+        scheduleData[`${d2}_2`] = temp1_2;
+
+        localStorage.setItem('hotlineSchedule', JSON.stringify(scheduleData));
+        renderSchedule();
+        updateStats();
+        closeSwapModal();
+        alert("Смены успешно поменялись местами!");
+    }
+
+    function autoFillCurrentMonth() {
+        if (!isAdmin) return;
+        
+        let msg = currentMonthFilter === 'ALL' 
+            ? "Заполнить пустые слоты по всему году? Существующие ручные назначения не будут изменены." 
+            : `Заполнить пустые слоты по кругу только за ${monthNames[currentMonthFilter]}? Существующие ручные назначения не будут изменены.`;
+            
+        if(!confirm(msg)) return;
+        
+        let queueIndex = 0;
+        let currentDate = new Date(year, 0, 1);
+        
+        while (currentDate.getFullYear() === year) {
+            const monthIdx = currentDate.getMonth();
+            
+            if (currentMonthFilter !== 'ALL' && monthIdx !== currentMonthFilter) {
+                currentDate.setDate(currentDate.getDate() + 1);
+                continue;
+            }
+
+            if (isWorkingDay(currentDate)) {
+                const isoDate = currentDate.toISOString().split('T')[0];
+                
+                if (!scheduleData[`${isoDate}_1`]) {
+                    scheduleData[`${isoDate}_1`] = inspectors[queueIndex % inspectors.length];
+                    queueIndex++;
+                }
+                
+                if (!scheduleData[`${isoDate}_2`]) {
+                    scheduleData[`${isoDate}_2`] = inspectors[queueIndex % inspectors.length];
+                    queueIndex++;
+                }
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        localStorage.setItem('hotlineSchedule', JSON.stringify(scheduleData));
+        renderSchedule();
+        updateStats();
+        alert("Автозаполнение успешно завершено!");
+    }
+
+    function clearSchedule() {
+        if (!isAdmin) return;
+        let confirmText = currentMonthFilter === 'ALL' 
+            ? "Вы уверены, что хотите полностью очистить график на весь год?" 
+            : `Очистить график только за ${monthNames[currentMonthFilter]}?`;
+
+        if(confirm(confirmText)) {
+            let currentDate = new Date(year, 0, 1);
+            while (currentDate.getFullYear() === year) {
+                const monthIdx = currentDate.getMonth();
+                if (currentMonthFilter === 'ALL' || monthIdx === currentMonthFilter) {
+                    const isoDate = currentDate.toISOString().split('T')[0];
+                    delete scheduleData[`${isoDate}_1`];
+                    delete scheduleData[`${isoDate}_2`];
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            localStorage.setItem('hotlineSchedule', JSON.stringify(scheduleData));
+            renderSchedule();
+            updateStats();
+        }
+    }
+
+    function printCurrentMonth() {
+        window.print();
+    }
+
+    function exportToExcel() {
+        let currentDate = new Date(year, 0, 1);
+        let rows = [];
+
+        rows.push({ "Дата": "Дата", "День недели": "День недели", "Дежурный 1": "Дежурный 1", "Дежурный 2": "Дежурный 2" });
+
+        while (currentDate.getFullYear() === year) {
+            const dateStr = currentDate.toLocaleDateString('ru-RU');
+            const weekdayStr = currentDate.toLocaleDateString('ru-RU', { weekday: 'long' });
+            const isoDate = currentDate.toISOString().split('T')[0];
+
+            if (!isWorkingDay(currentDate)) {
+                rows.push({
+                    "Дата": dateStr,
+                    "День недели": weekdayStr,
+                    "Дежурный 1": "Выходной / Праздник",
+                    "Дежурный 2": ""
+                });
+            } else {
+                rows.push({
+                    "Дата": dateStr,
+                    "День недели": weekdayStr,
+                    "Дежурный 1": scheduleData[`${isoDate}_1`] || "",
+                    "Дежурный 2": scheduleData[`${isoDate}_2`] || ""
+                });
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        const wsSchedule = XLSX.utils.json_to_sheet(rows, { skipHeader: true });
+
+        const counts = {};
+        inspectors.forEach(name => counts[name] = 0);
+        let d = new Date(year, 0, 1);
+        while(d.getFullYear() === year) {
+            const iso = d.toISOString().split('T')[0];
+            const n1 = scheduleData[`${iso}_1`];
+            const n2 = scheduleData[`${iso}_2`];
+            if(n1 && counts[n1] !== undefined) counts[n1]++;
+            if(n2 && counts[n2] !== undefined) counts[n2]++;
+            d.setDate(d.getDate() + 1);
+        }
+
+        const sortedStats = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+        let statsRows = [{ "Специалист": "Специалист", "Количество смен": "Количество смен" }];
+        sortedStats.forEach(([name, count]) => {
+            statsRows.push({ "Специалист": name, "Количество смен": count });
+        });
+        const wsStats = XLSX.utils.json_to_sheet(statsRows, { skipHeader: true });
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, wsSchedule, "График дежурств");
+        XLSX.utils.book_append_sheet(wb, wsStats, "Статистика");
+
+        XLSX.writeFile(wb, "Grafik_Dezhurstv_2027.xlsx");
+    }
+
+    init();
+</script>
+
+</body>
+</html>
